@@ -1,6 +1,7 @@
 .env
 venv_md/
 guide.md
-/__pycache__/
+__pycache__/
 *.pyc
+.claude/
 

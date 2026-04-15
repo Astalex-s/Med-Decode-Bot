@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C D:/MyStudy/PET_PROJECTS/MedDecode log --oneline)"
+    ]
+  }
+}
