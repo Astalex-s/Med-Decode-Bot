@@ -1,0 +1,6 @@
+.env
+venv_md/
+guide.md
+/__pycache__/
+*.pyc
+
