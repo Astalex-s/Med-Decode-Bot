@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     DB_NAME: str
     DB_USER: str
     DB_PASSWORD: str
+    DB_URL: str
     REDIS_HOST: str
     REDIS_PORT: int
     OPENAI_API_KEY: str
