@@ -8,6 +8,7 @@ from aiogram.enums import ParseMode
 
 
 from presentation.bot.handlers.start import my_router 
+from presentation.bot.handlers.analyze import analize_router
 from config import settings
 
 # Bot token can be obtained via https://t.me/BotFather
@@ -21,12 +22,17 @@ dp = Dispatcher()
 async def main() -> None:
     # Initialize Bot instance with default bot properties which will be passed to all API calls
     bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    
     dp.include_router(my_router)
-    # And the run events dispatching
-    await dp.start_polling(bot)
-
-
+    dp.include_router(analize_router)
+    try:                                                                                                                                          
+        await dp.start_polling(bot)                                                                                                               
+    except KeyboardInterrupt:                                                                                                                     
+        pass  
+    
+    
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
-    asyncio.run(main())
+    try:
+        asyncio.run(main())                                                                                                                       
+    except KeyboardInterrupt:
+        pass
