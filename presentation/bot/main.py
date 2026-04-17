@@ -6,33 +6,40 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
-
-from presentation.bot.handlers.start import my_router 
+# Импортируем роутеры из обработчиков — каждый роутер отвечает за свою группу команд
+from presentation.bot.handlers.start import my_router
 from presentation.bot.handlers.analyze import analize_router
+# Импортируем настройки из config.py — там хранятся все переменные из .env
 from config import settings
 
-# Bot token can be obtained via https://t.me/BotFather
+# Токен бота берём из настроек (не хардкодим прямо в коде)
 TOKEN = settings.BOT_TOKEN
 
-# All handlers should be attached to the Router (or Dispatcher)
-
+# Dispatcher — главный объект aiogram, принимает все обновления от Telegram
 dp = Dispatcher()
 
 
 async def main() -> None:
-    # Initialize Bot instance with default bot properties which will be passed to all API calls
+    # Создаём объект бота с токеном и настройкой HTML-разметки по умолчанию
     bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    dp.include_router(my_router)
-    dp.include_router(analize_router)
-    try:                                                                                                                                          
-        await dp.start_polling(bot)                                                                                                               
-    except KeyboardInterrupt:                                                                                                                     
-        pass  
-    
-    
+
+    # Подключаем роутеры к диспетчеру — порядок важен, обработчики проверяются сверху вниз
+    dp.include_router(my_router)      # обработчики команды /start
+    dp.include_router(analize_router) # обработчики фото и документов
+
+    try:
+        # Запускаем long polling — бот начинает слушать сообщения от Telegram
+        await dp.start_polling(bot)
+    except KeyboardInterrupt:
+        # Игнорируем ошибку при принудительной остановке (Ctrl+C)
+        pass
+
+
 if __name__ == "__main__":
+    # Настройка логирования: выводим INFO-сообщения в консоль
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
     try:
-        asyncio.run(main())                                                                                                                       
+        asyncio.run(main())
     except KeyboardInterrupt:
+        # Подавляем ошибку KeyboardInterrupt на уровне asyncio
         pass
