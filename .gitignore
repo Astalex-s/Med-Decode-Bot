@@ -5,4 +5,5 @@ __pycache__/
 *.pyc
 .claude/
 temp/
+task_prompt.md
 
