@@ -4,3 +4,8 @@ sqlalchemy[asyncio]
 asyncpg
 alembic
 aiogram==3.10.0
+opencv-python
+paddlepaddle
+paddleocr
+pdf2image
+pymupdf
