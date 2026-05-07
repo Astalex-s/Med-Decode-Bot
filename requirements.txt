@@ -5,7 +5,7 @@ asyncpg
 alembic
 aiogram==3.10.0
 opencv-python
-paddlepaddle
-paddleocr
-pdf2image
+easyocr
 pymupdf
+openai
+yookassa

@@ -2,38 +2,48 @@ from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Bool
 from datetime import datetime, timezone
 from sqlalchemy.orm import declarative_base
 
-# Базовый класс для всех моделей — от него наследуются все таблицы
 Base = declarative_base()
 
 
-# Модель таблицы пользователей
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)  # внутренний ID
-    telegram_id = Column(BigInteger, unique=True, nullable=False)            # ID пользователя в Telegram
-    username = Column(String(100), nullable=True)                            # username (может отсутствовать)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))  # дата регистрации
-    analyses_used = Column(Integer, default=0)                               # счётчик использованных анализов
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    telegram_id = Column(BigInteger, unique=True, nullable=False)
+    username = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    analyses_used = Column(Integer, default=0)
 
 
-# Модель таблицы подписок
 class Subscription(Base):
     __tablename__ = "subscriptions"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # связь с таблицей users
-    is_active = Column(Boolean, default=0)                             # активна ли подписка
-    expires_at = Column(DateTime, nullable=True)                       # дата окончания подписки
-    plan = Column(String(20), default="free")                          # тариф: "free" или "premium"
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    is_active = Column(Boolean, default=False)
+    expires_at = Column(DateTime, nullable=True)
+    plan = Column(String(20), default="free")
 
 
-# Модель таблицы истории анализов
 class AnalysisHistory(Base):
     __tablename__ = "analysis_history"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # связь с таблицей users
-    file_type = Column(String(10), nullable=False)                     # тип файла: "photo" или "pdf"
-    result_text = Column(Text, nullable=False)                         # текст расшифровки от OpenAI
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))  # дата анализа
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    file_type = Column(String(10), nullable=False)
+    result_text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class UserConsent(Base):
+    """Журнал согласий на обработку персональных данных (ФЗ-152 РФ)."""
+    __tablename__ = "user_consents"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    telegram_id = Column(BigInteger, unique=True, nullable=False, index=True)
+    full_name = Column(String(255), nullable=True)       # имя из Telegram-профиля
+    username = Column(String(100), nullable=True)        # @username
+    agreed = Column(Boolean, nullable=False, default=False)
+    agreed_at = Column(DateTime, nullable=True)          # момент нажатия «Согласен»
+    declined_at = Column(DateTime, nullable=True)        # момент нажатия «Отказываюсь»
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

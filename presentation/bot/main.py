@@ -6,40 +6,63 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
-# Импортируем роутеры из обработчиков — каждый роутер отвечает за свою группу команд
-from presentation.bot.handlers.start import my_router
+from presentation.bot.handlers.consent import consent_router
 from presentation.bot.handlers.analyze import analize_router
-# Импортируем настройки из config.py — там хранятся все переменные из .env
+from presentation.bot.handlers.payment import payment_router
+from presentation.bot.handlers.admin import admin_router
+from presentation.bot.middlewares.consent_check import ConsentCheckMiddleware
+from presentation.bot.middlewares.subscription import SubscriptionMiddleware
+from infrastructure.db.session import AsyncSessionLocal
 from config import settings
 
-# Токен бота берём из настроек (не хардкодим прямо в коде)
-TOKEN = settings.BOT_TOKEN
+logger = logging.getLogger(__name__)
 
-# Dispatcher — главный объект aiogram, принимает все обновления от Telegram
+TOKEN = settings.BOT_TOKEN
 dp = Dispatcher()
 
 
+async def db_session_middleware(handler, event, data):
+    async with AsyncSessionLocal() as session:
+        data["session"] = session
+        return await handler(event, data)
+
+
 async def main() -> None:
-    # Создаём объект бота с токеном и настройкой HTML-разметки по умолчанию
     bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 
-    # Подключаем роутеры к диспетчеру — порядок важен, обработчики проверяются сверху вниз
-    dp.include_router(my_router)      # обработчики команды /start
-    dp.include_router(analize_router) # обработчики фото и документов
+    # Инъекция сессии БД во все события
+    dp.update.outer_middleware(db_session_middleware)
 
+    # Проверка согласия на ПДн (применяется ко всем Message и CallbackQuery)
+    dp.message.middleware(ConsentCheckMiddleware())
+    dp.callback_query.middleware(ConsentCheckMiddleware())
+
+    # Проверка лимита подписки (только для сообщений с файлами)
+    dp.message.middleware(SubscriptionMiddleware())
+
+    # Порядок роутеров важен: consent перехватывает /start первым
+    dp.include_router(consent_router)   # /start + согласие ПДн
+    dp.include_router(admin_router)     # /export_users
+    dp.include_router(payment_router)   # Моя подписка / платежи
+    dp.include_router(analize_router)   # фото и документы
+
+    logger.info("Бот запущен")
     try:
-        # Запускаем long polling — бот начинает слушать сообщения от Telegram
         await dp.start_polling(bot)
     except KeyboardInterrupt:
-        # Игнорируем ошибку при принудительной остановке (Ctrl+C)
         pass
+    finally:
+        logger.info("Бот остановлен")
 
 
 if __name__ == "__main__":
-    # Настройка логирования: выводим INFO-сообщения в консоль
-    logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+    logging.basicConfig(
+        level=logging.INFO,
+        stream=sys.stdout,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        # Подавляем ошибку KeyboardInterrupt на уровне asyncio
         pass

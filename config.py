@@ -1,24 +1,30 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-# Класс настроек — автоматически загружает переменные из файла .env
 class Settings(BaseSettings):
-    # Указываем путь к .env файлу и кодировку
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-    BOT_TOKEN: str       # токен Telegram-бота от BotFather
-    DB_HOST: str         # хост базы данных PostgreSQL
-    DB_PORT: int         # порт базы данных (обычно 5432)
-    DB_NAME: str         # название базы данных
-    DB_USER: str         # пользователь базы данных
-    DB_PASSWORD: str     # пароль базы данных
-    DB_URL: str          # полная строка подключения к БД (для SQLAlchemy)
-    REDIS_HOST: str      # хост Redis (используется для кэширования/очередей)
-    REDIS_PORT: int      # порт Redis (обычно 6379)
-    OPENAI_API_KEY: str  # ключ API OpenAI для расшифровки анализов
-    YOOMONEY_TOKEN: str  # токен ЮMoney для платежей
-    FREE_LIMIT: int      # количество бесплатных анализов для пользователя
+    BOT_TOKEN: str
+    DB_HOST: str
+    DB_PORT: int
+    DB_NAME: str
+    DB_USER: str
+    DB_PASSWORD: str
+    DB_URL: str
+    REDIS_HOST: str
+    REDIS_PORT: int
+    OPENAI_API_KEY: str
+    YOOMONEY_TOKEN: str
+    FREE_LIMIT: int
+    ADMIN_IDS: list[int] = []
+
+    @field_validator("ADMIN_IDS", mode="before")
+    @classmethod
+    def parse_admin_ids(cls, v):
+        if isinstance(v, str):
+            return [int(x.strip()) for x in v.split(",") if x.strip()]
+        return v
 
 
-# Глобальный объект настроек — импортируется во всех модулях проекта
 settings = Settings()
