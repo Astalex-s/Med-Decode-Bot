@@ -1,177 +1,78 @@
 import os
+import base64
 import logging
 
 import cv2
 import numpy as np
 import fitz  # PyMuPDF
-import easyocr
 
 from domain.interfaces.ocr_service import IOCRService
 
 logger = logging.getLogger(__name__)
 
-# Минимальная длина длинной стороны для хорошего OCR
-MIN_LONG_SIDE = 1800
+MAX_LONG_SIDE = 2048
 
 
-def _resize_if_needed(image: np.ndarray) -> np.ndarray:
-    """Увеличивает изображение если оно слишком маленькое для OCR."""
+def _enhance(image: np.ndarray) -> np.ndarray:
+    """Лёгкий препроцессинг: контраст + resize. Без бинаризации — Vision работает лучше на натуральных фото."""
     h, w = image.shape[:2]
     long_side = max(h, w)
-    if long_side < MIN_LONG_SIDE:
-        scale = MIN_LONG_SIDE / long_side
-        new_w, new_h = int(w * scale), int(h * scale)
-        image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
-        logger.debug("Изображение увеличено: %dx%d -> %dx%d", w, h, new_w, new_h)
-    return image
+    if long_side > MAX_LONG_SIDE:
+        scale = MAX_LONG_SIDE / long_side
+        image = cv2.resize(image, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
 
-
-def _deskew(image: np.ndarray) -> np.ndarray:
-    """Корректирует небольшой наклон текста (±15°)."""
-    coords = np.column_stack(np.where(image < 128))
-    if len(coords) < 50:
-        return image
-    angle = cv2.minAreaRect(coords.astype(np.float32))[-1]
-    # minAreaRect возвращает угол в (-90, 0] — приводим к (-45, 45]
-    if angle < -45:
-        angle = 90 + angle
-    if abs(angle) < 1.0:   # пренебрежимо малый наклон
-        return image
-    h, w = image.shape[:2]
-    M = cv2.getRotationMatrix2D((w / 2, h / 2), angle, 1.0)
-    rotated = cv2.warpAffine(image, M, (w, h),
-                              flags=cv2.INTER_CUBIC,
-                              borderMode=cv2.BORDER_REPLICATE)
-    logger.debug("Deskew: угол коррекции %.2f°", angle)
-    return rotated
-
-
-def _preprocess_scan(image: np.ndarray) -> np.ndarray:
-    """
-    Препроцессинг для чистых сканов и PDF-страниц:
-    равномерное освещение, нет теней — можно использовать глобальный порог.
-    """
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    # CLAHE для улучшения контраста
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    gray = clahe.apply(gray)
-    gray = cv2.GaussianBlur(gray, (3, 3), 0)
-    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    return binary
+    l = clahe.apply(l)
+    enhanced = cv2.merge([l, a, b])
+    enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
+
+    return enhanced
 
 
-def _preprocess_photo(image: np.ndarray) -> np.ndarray:
-    """
-    Препроцессинг для фотографий с телефона:
-    - неравномерное освещение и тени → адаптивный порог
-    - возможный наклон → deskew
-    - низкое разрешение → upscale
-    Возвращает grayscale (не бинарный) — EasyOCR работает на нём лучше для сложных фото.
-    """
-    image = _resize_if_needed(image)
-
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Bilateral filter: убирает шум, но сохраняет края символов
-    gray = cv2.bilateralFilter(gray, d=9, sigmaColor=75, sigmaSpace=75)
-
-    # CLAHE с мелкой сеткой — выравниваем локальный контраст (борьба с тенями)
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(6, 6))
-    gray = clahe.apply(gray)
-
-    # Адаптивный порог — каждый пиксель сравнивается с локальным окружением
-    # Хорошо справляется с неравномерной засветкой и тенями от руки
-    binary = cv2.adaptiveThreshold(
-        gray, 255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        blockSize=31,   # размер локального окна (нечётное)
-        C=10,           # вычитаем константу — увеличивает контраст текста
-    )
-
-    # Лёгкая морфология: закрываем разрывы в тонких символах
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-
-    # Deskew по бинарному изображению
-    binary = _deskew(binary)
-
-    return binary
-
-
-def _auto_rotate(image: np.ndarray, reader: easyocr.Reader) -> np.ndarray:
-    """
-    Пробует 4 ориентации (0°, 90°, 180°, 270°),
-    выбирает ту, где OCR нашёл больше текста.
-    """
-    best_img = image
-    best_count = len(reader.readtext(image, detail=0))
-
-    for rot in [cv2.ROTATE_180, cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE]:
-        rotated = cv2.rotate(image, rot)
-        count = len(reader.readtext(rotated, detail=0))
-        if count > best_count:
-            best_count = count
-            best_img = rotated
-
-    if best_img is not image:
-        logger.info("Авто-поворот: выбрана ориентация с %d блоками текста", best_count)
-    return best_img
-
-
-def _items_to_text(results: list) -> str:
-    return "\n".join(item[1] for item in results)
+def _to_base64(image: np.ndarray) -> str:
+    """Конвертирует изображение в base64 строку (JPEG)."""
+    _, buffer = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    return base64.b64encode(buffer).decode('utf-8')
 
 
 class OCRService(IOCRService):
 
-    def __init__(self):
-        self._reader = easyocr.Reader(['ru', 'en'], gpu=False)
-
     def extract_text(self, file_path: str) -> str:
+        """Возвращает НЕ текст, а base64 изображений через разделитель для передачи в Vision."""
         ext = os.path.splitext(file_path)[1].lstrip(".").lower()
 
         if ext == "pdf":
-            return self._extract_from_pdf(file_path)
+            return self._process_pdf(file_path)
         else:
-            return self._extract_from_photo(file_path)
+            return self._process_photo(file_path)
 
-    def _extract_from_pdf(self, file_path: str) -> str:
-        text = ""
-        doc = fitz.open(file_path)
-        for page in doc:
-            pix = page.get_pixmap(dpi=200)   # повышаем dpi для лучшего OCR
-            img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, pix.n)
-            if pix.n == 4:
-                img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-            elif pix.n == 1:
-                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-            processed = _preprocess_scan(img)
-            text += _items_to_text(self._reader.readtext(processed)) + "\n"
-        logger.info("PDF OCR завершён: %d страниц", len(doc))
-        return text
-
-    def _extract_from_photo(self, file_path: str) -> str:
+    def _process_photo(self, file_path: str) -> str:
         img = cv2.imread(file_path)
         if img is None:
             logger.error("Не удалось открыть изображение: %s", file_path)
             return ""
 
         h, w = img.shape[:2]
-        logger.info("OCR фото: %dx%d px, файл: %s", w, h, os.path.basename(file_path))
+        logger.info("Фото: %dx%d px, файл: %s", w, h, os.path.basename(file_path))
 
-        # Определяем правильную ориентацию изображения
-        img = _auto_rotate(img, self._reader)
+        enhanced = _enhance(img)
+        return _to_base64(enhanced)
 
-        processed = _preprocess_photo(img)
-
-        # Прогоняем OCR дважды: на обработанном и оригинальном (после upscale)
-        # Берём вариант с большим числом найденных блоков
-        results_processed = self._reader.readtext(processed)
-
-        orig_resized = _resize_if_needed(img)
-        results_original = self._reader.readtext(orig_resized)
-
-        results = results_processed if len(results_processed) >= len(results_original) else results_original
-
-        logger.info("OCR фото: найдено %d текстовых блоков", len(results))
-        return _items_to_text(results)
+    def _process_pdf(self, file_path: str) -> str:
+        doc = fitz.open(file_path)
+        pages_b64 = []
+        for page in doc:
+            pix = page.get_pixmap(dpi=200)
+            img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, pix.n)
+            if pix.n == 4:
+                img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+            elif pix.n == 1:
+                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+            enhanced = _enhance(img)
+            pages_b64.append(_to_base64(enhanced))
+        logger.info("PDF обработан: %d страниц", len(doc))
+        # Разделяем страницы специальным маркером
+        return "|||PAGE|||".join(pages_b64)

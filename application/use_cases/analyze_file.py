@@ -6,10 +6,19 @@ from domain.entities.analysis import Analysis
 from domain.interfaces.analysis_repository import IAnalysisRepository
 from domain.interfaces.ocr_service import IOCRService
 from domain.interfaces.user_repository import IUserRepository
-from infrastructure.ai.openai_client import explain_analysis
-from infrastructure.ocr.text_processor import process_ocr_text
+from infrastructure.ai.openai_client import explain_analysis_vision
 
 logger = logging.getLogger(__name__)
+
+# Маркеры нераспознанного документа
+_NOT_RECOGNIZED_MARKERS = (
+    "не является медицинским",
+    "нечитаемый",
+    "не удалось",
+    "не могу распознать",
+    "не содержит медицинских",
+    "не читаемым",
+)
 
 
 async def analyze_file(
@@ -24,29 +33,23 @@ async def analyze_file(
     if user is None:
         raise ValueError(f"Пользователь с telegram_id={telegram_id} не найден")
 
-    logger.info("Запуск OCR для файла: %s", file_path)
-    # OCR синхронный — запускаем в executor, чтобы не блокировать event loop
+    logger.info("Обработка файла: %s", file_path)
+    # Препроцессинг синхронный — запускаем в executor
     loop = asyncio.get_event_loop()
-    raw_text = await loop.run_in_executor(None, ocr_service.extract_text, file_path)
-    logger.info("OCR завершён, извлечено символов: %d", len(raw_text))
+    images_data = await loop.run_in_executor(None, ocr_service.extract_text, file_path)
 
-    structured_text = process_ocr_text(raw_text)
+    if not images_data.strip():
+        logger.info("Не удалось обработать изображение — попытка не засчитана для пользователя %d", telegram_id)
+        return "Не удалось обработать изображение. Попробуйте загрузить более чёткое фото.\n\nПопытка не засчитана."
 
-    if not structured_text.strip():
-        logger.info("OCR не извлёк текст — попытка не засчитана для пользователя %d", telegram_id)
-        return "Не удалось распознать текст на изображении. Попробуйте загрузить более чёткое фото.\n\nПопытка не засчитана."
+    # Разделяем страницы (для PDF)
+    images_b64 = [img for img in images_data.split("|||PAGE|||") if img.strip()]
 
-    ai_result = await explain_analysis(structured_text)
+    # Отправляем изображения в GPT-4o-mini Vision
+    ai_result = await explain_analysis_vision(images_b64)
 
-    # Если GPT сообщил что текст нечитаем или не является анализом — не засчитываем
-    _not_recognized_markers = (
-        "не является медицинским",
-        "нечитаемый",
-        "не удалось",
-        "не могу распознать",
-        "не содержит медицинских",
-    )
-    if any(marker in ai_result.lower() for marker in _not_recognized_markers):
+    # Если GPT сообщил что не может распознать — не засчитываем
+    if any(marker in ai_result.lower() for marker in _NOT_RECOGNIZED_MARKERS):
         logger.info("GPT не распознал анализ — попытка не засчитана для пользователя %d", telegram_id)
         return ai_result + "\n\n<i>Попытка не засчитана.</i>"
 

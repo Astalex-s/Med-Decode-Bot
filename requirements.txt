@@ -5,8 +5,7 @@ asyncpg
 psycopg2-binary
 alembic
 aiogram==3.10.0
-opencv-python
-easyocr
+opencv-python-headless
 pymupdf
 openai
 yookassa
