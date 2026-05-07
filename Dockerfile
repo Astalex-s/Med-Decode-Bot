@@ -9,12 +9,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+# PyTorch CPU-only (~200 МБ вместо ~5 ГБ с CUDA)
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Создаём папку для временных файлов
 RUN mkdir -p temp
 
 CMD ["python", "-m", "presentation.bot.main"]
