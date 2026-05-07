@@ -13,17 +13,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Pull latest code
+      - name: Sync to /opt/meddecode
         run: |
-          if [ ! -d "/opt/meddecode" ]; then
-            git clone https://github.com/Astalex-s/Med-Decode-Bot.git /opt/meddecode
-          fi
-          cd /opt/meddecode
-          git pull origin main
+          mkdir -p /opt/meddecode
+          rsync -a --delete --exclude='.env' --exclude='temp/' $GITHUB_WORKSPACE/ /opt/meddecode/
 
       - name: Create .env
         run: |
-          cat > /opt/meddecode/.env << 'ENVEOF'
+          cat > /opt/meddecode/.env <<ENVEOF
           BOT_TOKEN=${{ secrets.BOT_TOKEN }}
           DB_HOST=postgres
           DB_PORT=5432
@@ -48,7 +45,7 @@ jobs:
       - name: Run migrations
         run: |
           cd /opt/meddecode
-          sleep 5
+          sleep 10
           docker compose exec -T bot alembic upgrade head
 
       - name: Done
