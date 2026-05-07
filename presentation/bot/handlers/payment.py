@@ -7,14 +7,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from application.use_cases.check_subscription import check_subscription
 from application.use_cases.process_payment import process_payment
 from infrastructure.db.repositories.user_repo import UserRepository
-from config import settings
-
 logger = logging.getLogger(__name__)
 
 payment_router = Router(name=__name__)
 
+# Платёж через Telegram Stars.
+# Когда будет готов токен ЮKassa от BotFather — заменить на:
+#   CURRENCY = "RUB"
+#   SUBSCRIPTION_PRICE = 29900  # 299 рублей в копейках
+#   provider_token=settings.YUKASSA_TOKEN
 SUBSCRIPTION_PRICE = 300    # 300 звёзд Telegram ≈ 299 ₽
-CURRENCY = "XTR"           # Telegram Stars
+CURRENCY = "XTR"           # Telegram Stars (заглушка до подключения ЮKassa)
 
 
 @payment_router.message(F.text == "Моя подписка")

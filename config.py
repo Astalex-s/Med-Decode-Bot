@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     REDIS_HOST: str
     REDIS_PORT: int
     OPENAI_API_KEY: str
-    YOOMONEY_TOKEN: str
+    YUKASSA_TOKEN: str
     FREE_LIMIT: int
     ADMIN_IDS: list[int] = []
 

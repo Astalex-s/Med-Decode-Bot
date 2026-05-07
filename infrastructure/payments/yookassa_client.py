@@ -11,8 +11,10 @@ try:
     from yookassa import Configuration, Payment
     from config import settings
 
-    Configuration.account_id = settings.YOOKASSA_SHOP_ID
-    Configuration.secret_key = settings.YOOKASSA_SECRET_KEY
+    # YUKASSA_TOKEN используется в Telegram Payments как provider_token
+    # Для прямого API ЮKassa нужны YUKASSA_SHOP_ID и YUKASSA_SECRET_KEY
+    Configuration.account_id = getattr(settings, "YUKASSA_SHOP_ID", "")
+    Configuration.secret_key = getattr(settings, "YUKASSA_SECRET_KEY", "")
     _YOOKASSA_AVAILABLE = True
 except Exception:
     _YOOKASSA_AVAILABLE = False

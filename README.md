@@ -60,7 +60,7 @@ GPT-4o-mini (OpenAI API)
 | Расшифровка анализов | Фото (JPG/PNG) или PDF → объяснение на русском |
 | Бесплатный лимит | `FREE_LIMIT` анализов бесплатно (по умолчанию 3) |
 | Подписка Premium | Неограниченные анализы на 30 дней |
-| Оплата через Telegram Stars | Встроенная оплата звёздами Telegram, не нужны внешние провайдеры |
+| Оплата через ЮKassa | Оплата через ЮKassa (Telegram Payments), резервный вариант — Telegram Stars |
 | Статус подписки | Команда "Моя подписка" — лимит, срок действия |
 | Согласие на обработку ПДн | Экран согласия при первом запуске (ФЗ-152 РФ) |
 
@@ -89,7 +89,7 @@ GPT-4o-mini (OpenAI API)
 | **БД** | PostgreSQL 16, SQLAlchemy 2.0 async, asyncpg, Alembic |
 | **Кэш** | Redis 7 |
 | **Конфиг** | pydantic-settings v2, .env |
-| **Платежи** | Telegram Stars (XTR) |
+| **Платежи** | ЮKassa (Telegram Payments), Telegram Stars |
 | **PDF** | fpdf2 |
 | **Контейнеризация** | Docker, Docker Compose |
 | **CI/CD** | GitHub Actions |
@@ -309,7 +309,7 @@ python -m presentation.bot.main
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | ✅ | Параметры БД |
 | `REDIS_HOST`, `REDIS_PORT` | ✅ | Параметры Redis |
 | `OPENAI_API_KEY` | ✅ | Ключ OpenAI API |
-| `YOOMONEY_TOKEN` | — | Токен платёжного провайдера (для Telegram Stars не нужен) |
+| `YUKASSA_TOKEN` | — | Provider token ЮKassa от @BotFather (пока не подключена — используются Telegram Stars) |
 | `FREE_LIMIT` | ✅ | Количество бесплатных анализов (рекомендуется 3) |
 | `ADMIN_IDS` | — | Telegram ID администраторов через запятую |
 
@@ -317,17 +317,22 @@ python -m presentation.bot.main
 
 ## Платежи
 
-Бот использует **Telegram Stars (XTR)** — встроенную валюту Telegram. Не требует регистрации в платёжных системах.
+Бот интегрирован с **ЮKassa** через Telegram Payments. До получения токена провайдера используется **Telegram Stars (XTR)** как резервный вариант.
 
-Текущие настройки:
-- Цена подписки: **300 ⭐** (≈ 299 ₽ / 30 дней)
+### Текущие настройки
+- Цена подписки: **299 ₽ / 30 дней**
+- Активный провайдер: Telegram Stars (заглушка)
 
-Для подключения ЮKassa (реальные рубли):
-1. Зарегистрируйтесь на [kassa.yandex.ru](https://kassa.yandex.ru) как ИП/самозанятый
-2. Получите shopId и secretKey
-3. В @BotFather → Payments → ЮKassa → введите реквизиты → получите provider_token
-4. Вставьте токен в `.env` как `YOOMONEY_TOKEN=`
-5. В `payment.py` замените `CURRENCY = "XTR"` на `CURRENCY = "RUB"` и `provider_token=""` на `provider_token=settings.YOOMONEY_TOKEN`
+### Подключение ЮKassa
+
+1. Зарегистрируйтесь на [kassa.yandex.ru](https://kassa.yandex.ru) как ИП или самозанятый
+2. В @BotFather → `/mybots` → выберите бота → **Payments** → **ЮKassa**
+3. Введите реквизиты магазина — BotFather выдаст `provider_token`
+4. Добавьте токен в `.env`:
+   ```
+   YUKASSA_TOKEN=1234567890:LIVE:xxxxxxxxxxxxxxxx
+   ```
+5. В `payment.py` раскомментируйте строки с `CURRENCY = "RUB"` и `provider_token=settings.YUKASSA_TOKEN`
 
 ---
 
