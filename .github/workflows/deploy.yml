@@ -7,62 +7,47 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: 22
-          script: |
-            set -e
+      - name: Create .env
+        run: |
+          cat > /opt/meddecode/.env <<EOF
+          BOT_TOKEN=${{ secrets.BOT_TOKEN }}
+          DB_HOST=postgres
+          DB_PORT=5432
+          DB_NAME=${{ secrets.DB_NAME }}
+          DB_USER=${{ secrets.DB_USER }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          DB_URL=postgresql+asyncpg://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@postgres:5432/${{ secrets.DB_NAME }}
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          YUKASSA_TOKEN=${{ secrets.YUKASSA_TOKEN }}
+          FREE_LIMIT=${{ secrets.FREE_LIMIT }}
+          ADMIN_IDS=${{ secrets.ADMIN_IDS }}
+          EOF
 
-            # Если репозиторий ещё не склонирован — клонируем
-            if [ ! -d "/opt/meddecode" ]; then
-              git clone https://github.com/Astalex-s/Med_Decode_Bot.git /opt/meddecode
-            fi
+      - name: Pull latest code
+        run: |
+          if [ ! -d "/opt/meddecode" ]; then
+            git clone https://github.com/Astalex-s/Med_Decode_Bot.git /opt/meddecode
+          fi
+          cd /opt/meddecode
+          git pull origin main
 
-            cd /opt/meddecode
+      - name: Deploy
+        run: |
+          cd /opt/meddecode
+          docker compose up -d --build --no-deps bot
 
-            # Тянем последние изменения
-            git pull origin main
+      - name: Run migrations
+        run: |
+          cd /opt/meddecode
+          docker compose exec -T bot alembic upgrade head
 
-            # Создаём .env из переменных окружения (прокинутых через GitHub Secrets)
-            cat > .env <<EOF
-            BOT_TOKEN=${BOT_TOKEN}
-            DB_HOST=postgres
-            DB_PORT=5432
-            DB_NAME=${DB_NAME}
-            DB_USER=${DB_USER}
-            DB_PASSWORD=${DB_PASSWORD}
-            DB_URL=postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
-            REDIS_HOST=redis
-            REDIS_PORT=6379
-            OPENAI_API_KEY=${OPENAI_API_KEY}
-            YUKASSA_TOKEN=${YUKASSA_TOKEN}
-            FREE_LIMIT=${FREE_LIMIT}
-            ADMIN_IDS=${ADMIN_IDS}
-            EOF
-
-            # Пересобираем и перезапускаем бота (без простоя для postgres/redis)
-            docker compose up -d --build --no-deps bot
-
-            # Применяем новые миграции если есть
-            docker compose exec -T bot alembic upgrade head
-
-            echo "Deployed successfully at $(date)"
-        env:
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          YUKASSA_TOKEN: ${{ secrets.YUKASSA_TOKEN }}
-          FREE_LIMIT: ${{ secrets.FREE_LIMIT }}
-          ADMIN_IDS: ${{ secrets.ADMIN_IDS }}
+      - name: Done
+        run: echo "Deployed successfully at $(date)"
