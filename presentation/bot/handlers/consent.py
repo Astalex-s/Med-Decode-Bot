@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timezone
 
 from aiogram import Router, F
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import (
     Message, CallbackQuery,
     InlineKeyboardMarkup, InlineKeyboardButton,
@@ -55,10 +56,18 @@ async def start_with_consent(message: Message, session: AsyncSession) -> None:
     await message.answer(CONSENT_TEXT, reply_markup=consent_keyboard())
 
 
+async def _safe_answer(callback: CallbackQuery, text: str = "", show_alert: bool = False) -> None:
+    """Отвечает на callback, игнорируя ошибку устаревшего запроса."""
+    try:
+        await callback.answer(text, show_alert=show_alert)
+    except TelegramBadRequest:
+        pass
+
+
 @consent_router.callback_query(F.data == "consent:document")
 async def send_consent_document(callback: CallbackQuery) -> None:
-    await callback.answer()
-    doc = FSInputFile("consent_document.txt", filename="Согласие_на_обработку_ПДн_MedDecode.txt")
+    await _safe_answer(callback)
+    doc = FSInputFile("consent_document.pdf", filename="Согласие_на_обработку_ПДн_MedDecode.pdf")
     await callback.message.answer_document(
         doc,
         caption="Полный текст согласия на обработку персональных данных."
@@ -67,7 +76,7 @@ async def send_consent_document(callback: CallbackQuery) -> None:
 
 @consent_router.callback_query(F.data == "consent:agree")
 async def handle_agree(callback: CallbackQuery, session: AsyncSession) -> None:
-    await callback.answer("Согласие зафиксировано.")
+    await _safe_answer(callback, "Согласие зафиксировано.")
 
     repo = ConsentRepository(session)
     consent = UserConsent(
@@ -89,7 +98,7 @@ async def handle_agree(callback: CallbackQuery, session: AsyncSession) -> None:
 
 @consent_router.callback_query(F.data == "consent:decline")
 async def handle_decline(callback: CallbackQuery, session: AsyncSession) -> None:
-    await callback.answer("Вы отказались от обработки данных.", show_alert=True)
+    await _safe_answer(callback, "Вы отказались от обработки данных.", show_alert=True)
 
     repo = ConsentRepository(session)
     consent = UserConsent(

@@ -9,3 +9,4 @@ easyocr
 pymupdf
 openai
 yookassa
+fpdf2

@@ -46,16 +46,19 @@ async def main() -> None:
     dp.include_router(payment_router)   # Моя подписка / платежи
     dp.include_router(analize_router)   # фото и документы
 
-    logger.info("Бот запущен")
+    logger.info("Bot started: @MedDecodeBot")
     try:
         await dp.start_polling(bot)
     except KeyboardInterrupt:
         pass
     finally:
-        logger.info("Бот остановлен")
+        logger.info("Bot stopped")
 
 
 if __name__ == "__main__":
+    # Принудительно UTF-8 для Windows-консоли (иначе Unicode-имена ломают логи)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     logging.basicConfig(
         level=logging.INFO,
         stream=sys.stdout,

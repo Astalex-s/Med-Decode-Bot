@@ -1,5 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean, BigInteger
-from datetime import datetime, timezone
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Boolean, BigInteger, func
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -11,7 +10,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     telegram_id = Column(BigInteger, unique=True, nullable=False)
     username = Column(String(100), nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
     analyses_used = Column(Integer, default=0)
 
 
@@ -21,7 +20,7 @@ class Subscription(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     is_active = Column(Boolean, default=False)
-    expires_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
     plan = Column(String(20), default="free")
 
 
@@ -32,7 +31,7 @@ class AnalysisHistory(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     file_type = Column(String(10), nullable=False)
     result_text = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class UserConsent(Base):
@@ -44,6 +43,6 @@ class UserConsent(Base):
     full_name = Column(String(255), nullable=True)       # имя из Telegram-профиля
     username = Column(String(100), nullable=True)        # @username
     agreed = Column(Boolean, nullable=False, default=False)
-    agreed_at = Column(DateTime, nullable=True)          # момент нажатия «Согласен»
-    declined_at = Column(DateTime, nullable=True)        # момент нажатия «Отказываюсь»
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    agreed_at = Column(DateTime(timezone=True), nullable=True)
+    declined_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
