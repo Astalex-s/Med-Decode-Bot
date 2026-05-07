@@ -13,9 +13,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Pull latest code
+        run: |
+          if [ ! -d "/opt/meddecode" ]; then
+            git clone https://github.com/Astalex-s/Med-Decode-Bot.git /opt/meddecode
+          fi
+          cd /opt/meddecode
+          git pull origin main
+
       - name: Create .env
         run: |
-          cat > /opt/meddecode/.env <<EOF
+          cat > /opt/meddecode/.env << 'ENVEOF'
           BOT_TOKEN=${{ secrets.BOT_TOKEN }}
           DB_HOST=postgres
           DB_PORT=5432
@@ -29,24 +37,18 @@ jobs:
           YUKASSA_TOKEN=${{ secrets.YUKASSA_TOKEN }}
           FREE_LIMIT=${{ secrets.FREE_LIMIT }}
           ADMIN_IDS=${{ secrets.ADMIN_IDS }}
-          EOF
-
-      - name: Pull latest code
-        run: |
-          if [ ! -d "/opt/meddecode" ]; then
-            git clone https://github.com/Astalex-s/Med_Decode_Bot.git /opt/meddecode
-          fi
-          cd /opt/meddecode
-          git pull origin main
+          ENVEOF
+          sed -i 's/^          //' /opt/meddecode/.env
 
       - name: Deploy
         run: |
           cd /opt/meddecode
-          docker compose up -d --build --no-deps bot
+          docker compose up -d --build
 
       - name: Run migrations
         run: |
           cd /opt/meddecode
+          sleep 5
           docker compose exec -T bot alembic upgrade head
 
       - name: Done
