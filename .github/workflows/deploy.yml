@@ -33,11 +33,36 @@ jobs:
             # Тянем последние изменения
             git pull origin main
 
+            # Создаём .env из переменных окружения (прокинутых через GitHub Secrets)
+            cat > .env <<EOF
+            BOT_TOKEN=${BOT_TOKEN}
+            DB_HOST=postgres
+            DB_PORT=5432
+            DB_NAME=${DB_NAME}
+            DB_USER=${DB_USER}
+            DB_PASSWORD=${DB_PASSWORD}
+            DB_URL=postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+            REDIS_HOST=redis
+            REDIS_PORT=6379
+            OPENAI_API_KEY=${OPENAI_API_KEY}
+            YUKASSA_TOKEN=${YUKASSA_TOKEN}
+            FREE_LIMIT=${FREE_LIMIT}
+            ADMIN_IDS=${ADMIN_IDS}
+            EOF
+
             # Пересобираем и перезапускаем бота (без простоя для postgres/redis)
-            docker compose pull || true
             docker compose up -d --build --no-deps bot
 
             # Применяем новые миграции если есть
             docker compose exec -T bot alembic upgrade head
 
             echo "Deployed successfully at $(date)"
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          YUKASSA_TOKEN: ${{ secrets.YUKASSA_TOKEN }}
+          FREE_LIMIT: ${{ secrets.FREE_LIMIT }}
+          ADMIN_IDS: ${{ secrets.ADMIN_IDS }}
