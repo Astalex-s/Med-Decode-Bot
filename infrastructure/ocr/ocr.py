@@ -98,6 +98,26 @@ def _preprocess_photo(image: np.ndarray) -> np.ndarray:
     return binary
 
 
+def _auto_rotate(image: np.ndarray, reader: easyocr.Reader) -> np.ndarray:
+    """
+    Пробует 4 ориентации (0°, 90°, 180°, 270°),
+    выбирает ту, где OCR нашёл больше текста.
+    """
+    best_img = image
+    best_count = len(reader.readtext(image, detail=0))
+
+    for rot in [cv2.ROTATE_180, cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE]:
+        rotated = cv2.rotate(image, rot)
+        count = len(reader.readtext(rotated, detail=0))
+        if count > best_count:
+            best_count = count
+            best_img = rotated
+
+    if best_img is not image:
+        logger.info("Авто-поворот: выбрана ориентация с %d блоками текста", best_count)
+    return best_img
+
+
 def _items_to_text(results: list) -> str:
     return "\n".join(item[1] for item in results)
 
@@ -138,6 +158,9 @@ class OCRService(IOCRService):
 
         h, w = img.shape[:2]
         logger.info("OCR фото: %dx%d px, файл: %s", w, h, os.path.basename(file_path))
+
+        # Определяем правильную ориентацию изображения
+        img = _auto_rotate(img, self._reader)
 
         processed = _preprocess_photo(img)
 
