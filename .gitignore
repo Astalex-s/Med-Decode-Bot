@@ -3,7 +3,11 @@ venv_md/
 guide.md
 __pycache__/
 *.pyc
+*.pyo
 .claude/
 temp/
 task_prompt.md
+bot.log
+*.log
+consent_document.txt
 

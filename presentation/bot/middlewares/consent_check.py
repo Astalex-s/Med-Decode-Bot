@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 # callback_data и команды, которые НЕ блокируем (до согласия)
 _CONSENT_CALLBACKS = {"consent:agree", "consent:decline", "consent:document"}
-_ALLOWED_COMMANDS = {"/start"}
+_ALLOWED_COMMANDS = {"/start", "/test_pay"}
 
 
 class ConsentCheckMiddleware(BaseMiddleware):

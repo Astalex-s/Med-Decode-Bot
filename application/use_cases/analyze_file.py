@@ -33,9 +33,22 @@ async def analyze_file(
     structured_text = process_ocr_text(raw_text)
 
     if not structured_text.strip():
-        return "Не удалось распознать текст на изображении. Попробуйте загрузить более чёткое фото."
+        logger.info("OCR не извлёк текст — попытка не засчитана для пользователя %d", telegram_id)
+        return "Не удалось распознать текст на изображении. Попробуйте загрузить более чёткое фото.\n\nПопытка не засчитана."
 
     ai_result = await explain_analysis(structured_text)
+
+    # Если GPT сообщил что текст нечитаем или не является анализом — не засчитываем
+    _not_recognized_markers = (
+        "не является медицинским",
+        "нечитаемый",
+        "не удалось",
+        "не могу распознать",
+        "не содержит медицинских",
+    )
+    if any(marker in ai_result.lower() for marker in _not_recognized_markers):
+        logger.info("GPT не распознал анализ — попытка не засчитана для пользователя %d", telegram_id)
+        return ai_result + "\n\n<i>Попытка не засчитана.</i>"
 
     analysis = Analysis(
         user_id=user.id,

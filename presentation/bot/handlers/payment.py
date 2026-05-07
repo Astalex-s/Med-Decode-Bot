@@ -7,13 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from application.use_cases.check_subscription import check_subscription
 from application.use_cases.process_payment import process_payment
 from infrastructure.db.repositories.user_repo import UserRepository
+from config import settings
 
 logger = logging.getLogger(__name__)
 
 payment_router = Router(name=__name__)
 
-SUBSCRIPTION_PRICE = 29900  # 299 рублей в копейках
-CURRENCY = "RUB"
+SUBSCRIPTION_PRICE = 300    # 300 звёзд Telegram ≈ 299 ₽
+CURRENCY = "XTR"           # Telegram Stars
 
 
 @payment_router.message(F.text == "Моя подписка")
@@ -39,7 +40,7 @@ async def subscription_info_handler(message: Message, session: AsyncSession) -> 
             f"Ваша подписка: <b>Бесплатный план</b>\n"
             f"Использовано анализов: <b>{used}/{settings.FREE_LIMIT}</b>\n"
             f"Осталось бесплатных: <b>{remaining}</b>\n\n"
-            "Оформите подписку <b>Premium</b> за 299 ₽/мес — неограниченные анализы.\n\n"
+            "Оформите подписку <b>Premium</b> за 300 ⭐/мес — неограниченные анализы.\n\n"
             "Нажмите /subscribe для оплаты."
         )
 
@@ -52,9 +53,24 @@ async def send_invoice_handler(message: Message) -> None:
         payload="premium_subscription_30d",
         currency=CURRENCY,
         prices=[LabeledPrice(label="Premium на 30 дней", amount=SUBSCRIPTION_PRICE)],
-        provider_token="",  # Для Telegram Stars оставить пустым; для ЮKassa — вставить токен из .env
+        provider_token="",
     )
     logger.info("Инвойс отправлен пользователю %d", message.from_user.id)
+
+
+@payment_router.message(F.text == "/test_pay")
+async def test_pay_handler(message: Message, session: AsyncSession) -> None:
+    """Активирует Premium без реальной оплаты — только для демонстрации."""
+    await process_payment(
+        telegram_id=message.from_user.id,
+        user_repo=UserRepository(session),
+    )
+    logger.info("Тестовая активация Premium для пользователя %d", message.from_user.id)
+    await message.answer(
+        "✅ <b>[ТЕСТ]</b> Подписка активирована вручную администратором.\n"
+        "Подписка <b>Premium</b> активирована на 30 дней.\n\n"
+        "Теперь вы можете загружать неограниченное количество анализов."
+    )
 
 
 @payment_router.pre_checkout_query()
