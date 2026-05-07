@@ -2,6 +2,7 @@ python-dotenv
 pydantic-settings
 sqlalchemy[asyncio]
 asyncpg
+psycopg2-binary
 alembic
 aiogram==3.10.0
 opencv-python
