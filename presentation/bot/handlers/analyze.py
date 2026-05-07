@@ -2,6 +2,7 @@ import logging
 import uuid
 
 from aiogram import Router, F
+from aiogram.enums import ParseMode
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +21,17 @@ EXTENSIONS = {
     "image/jpeg": ".jpg",
 }
 ALLOWED_MIME_TYPES = set(EXTENSIONS.keys())
+
+MAX_MSG_LEN = 4096
+
+
+async def _send_result(message: Message, text: str) -> None:
+    """Отправляет результат, разбивая на части если превышает лимит Telegram."""
+    # GPT возвращает markdown — отправляем без parse_mode
+    while text:
+        chunk = text[:MAX_MSG_LEN]
+        text = text[MAX_MSG_LEN:]
+        await message.answer(chunk, parse_mode=None)
 
 
 @analize_router.message(F.photo)
@@ -42,11 +54,17 @@ async def photo_handler(message: Message, session: AsyncSession) -> None:
             analysis_repo=AnalysisRepository(session),
             ocr_service=OCRService(),
         )
-        await status_msg.delete()
-        await message.answer(result)
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+        await _send_result(message, result)
     except Exception as e:
         logger.exception("Ошибка при обработке фото от пользователя %d", message.from_user.id)
-        await status_msg.delete()
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
         await message.answer("Произошла ошибка при обработке файла. Попробуйте ещё раз.")
 
 
@@ -76,9 +94,15 @@ async def document_handler(message: Message, session: AsyncSession) -> None:
             analysis_repo=AnalysisRepository(session),
             ocr_service=OCRService(),
         )
-        await status_msg.delete()
-        await message.answer(result)
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+        await _send_result(message, result)
     except Exception as e:
         logger.exception("Ошибка при обработке документа от пользователя %d", message.from_user.id)
-        await status_msg.delete()
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
         await message.answer("Произошла ошибка при обработке файла. Попробуйте ещё раз.")
