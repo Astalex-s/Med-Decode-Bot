@@ -26,7 +26,10 @@ async def check_subscription(
 
     # Если подписка есть — проверяем срок действия
     if subscription and subscription.is_active:
-        if subscription.expires_at and subscription.expires_at < datetime.now(timezone.utc):
+        expires = subscription.expires_at
+        if expires and expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if expires and expires < datetime.now(timezone.utc):
             # Подписка истекла — деактивируем
             subscription.is_active = False
             await user_repo.update_subscription(subscription)
