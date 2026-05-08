@@ -40,7 +40,7 @@ async def analyze_file(
 
     if not images_data.strip():
         logger.info("Не удалось обработать изображение — попытка не засчитана для пользователя %d", telegram_id)
-        return "Не удалось обработать изображение. Попробуйте загрузить более чёткое фото.\n\nПопытка не засчитана."
+        return None  # Сигнал что распознавание не удалось
 
     # Разделяем страницы (для PDF)
     images_b64 = [img for img in images_data.split("|||PAGE|||") if img.strip()]
@@ -51,7 +51,7 @@ async def analyze_file(
     # Если GPT сообщил что не может распознать — не засчитываем
     if any(marker in ai_result.lower() for marker in _NOT_RECOGNIZED_MARKERS):
         logger.info("GPT не распознал анализ — попытка не засчитана для пользователя %d", telegram_id)
-        return ai_result + "\n\nПопытка не засчитана."
+        return None  # Сигнал что распознавание не удалось
 
     analysis = Analysis(
         user_id=user.id,

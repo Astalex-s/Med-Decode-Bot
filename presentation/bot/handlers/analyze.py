@@ -79,8 +79,15 @@ async def photo_handler(message: Message, session: AsyncSession) -> None:
             await status_msg.delete()
         except Exception:
             pass
-        await _send_result(message, result)
-    except Exception as e:
+        if result is None:
+            await message.answer(
+                "Не удалось распознать анализ на изображении.\n"
+                "Попробуйте загрузить более чёткое фото.\n\n"
+                "Попытка не засчитана, лимит не уменьшился."
+            )
+        else:
+            await _send_result(message, result)
+    except Exception:
         logger.exception("Ошибка при обработке фото от пользователя %d", message.from_user.id)
         try:
             await status_msg.delete()
@@ -119,8 +126,15 @@ async def document_handler(message: Message, session: AsyncSession) -> None:
             await status_msg.delete()
         except Exception:
             pass
-        await _send_result(message, result)
-    except Exception as e:
+        if result is None:
+            await message.answer(
+                "Не удалось распознать анализ в документе.\n"
+                "Попробуйте загрузить более чёткий файл.\n\n"
+                "Попытка не засчитана, лимит не уменьшился."
+            )
+        else:
+            await _send_result(message, result)
+    except Exception:
         logger.exception("Ошибка при обработке документа от пользователя %d", message.from_user.id)
         try:
             await status_msg.delete()
