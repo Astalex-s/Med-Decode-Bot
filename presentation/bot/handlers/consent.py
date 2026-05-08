@@ -133,9 +133,11 @@ async def _register_and_greet(message: Message, session: AsyncSession, user_obj=
         await user_repo.create(new_user)
         logger.info("Зарегистрирован пользователь %d (@%s)", from_user.id, from_user.username)
 
+    from config import settings as cfg
+    is_admin = from_user.id in cfg.ADMIN_IDS
     await message.answer(
         f"<b>{from_user.full_name}</b>, добро пожаловать в MedDecode!\n\n"
         "Отправьте фото или PDF с медицинскими анализами — я расшифрую их простым языком.\n\n"
         "Выберите действие:",
-        reply_markup=main_keyboard()
+        reply_markup=main_keyboard(is_admin=is_admin)
     )

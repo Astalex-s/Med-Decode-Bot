@@ -4,27 +4,33 @@ from aiogram import Router, F
 from aiogram.types import Message, LabeledPrice, PreCheckoutQuery, SuccessfulPayment
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from application.use_cases.check_subscription import check_subscription
 from application.use_cases.process_payment import process_payment
 from infrastructure.db.repositories.user_repo import UserRepository
+from infrastructure.db.repositories.config_repo import ConfigRepository
+
 logger = logging.getLogger(__name__)
 
 payment_router = Router(name=__name__)
 
-# Платёж через Telegram Stars.
-# Когда будет готов токен ЮKassa от BotFather — заменить на:
-#   CURRENCY = "RUB"
-#   SUBSCRIPTION_PRICE = 29900  # 299 рублей в копейках
-#   provider_token=settings.YUKASSA_TOKEN
-SUBSCRIPTION_PRICE = 300    # 300 звёзд Telegram ≈ 299 ₽
-CURRENCY = "XTR"           # Telegram Stars (заглушка до подключения ЮKassa)
+CURRENCY = "XTR"           # Telegram Stars
+_DEFAULT_PRICE = 300       # fallback если запись в БД ещё не создана
+_DEFAULT_FREE_LIMIT = 3    # fallback если запись в БД ещё не создана
+
+
+async def _get_price(session: AsyncSession) -> int:
+    config = ConfigRepository(session)
+    return int(await config.get("subscription_price", str(_DEFAULT_PRICE)))
+
+
+async def _get_free_limit(session: AsyncSession) -> int:
+    from config import settings
+    config = ConfigRepository(session)
+    return int(await config.get("free_limit", str(settings.FREE_LIMIT)))
 
 
 @payment_router.message(F.text == "Моя подписка")
 async def subscription_info_handler(message: Message, session: AsyncSession) -> None:
     repo = UserRepository(session)
-    allowed, reason = await check_subscription(message.from_user.id, repo)
-
     user = await repo.get_by_telegram_id(message.from_user.id)
     subscription = await repo.get_subscription(user.id) if user else None
 
@@ -36,44 +42,32 @@ async def subscription_info_handler(message: Message, session: AsyncSession) -> 
             "Неограниченное количество анализов."
         )
     else:
-        from config import settings
+        free_limit = await _get_free_limit(session)
+        price = await _get_price(session)
         used = user.analyses_used if user else 0
-        remaining = max(0, settings.FREE_LIMIT - used)
+        remaining = max(0, free_limit - used)
         await message.answer(
             f"Ваша подписка: <b>Бесплатный план</b>\n"
-            f"Использовано анализов: <b>{used}/{settings.FREE_LIMIT}</b>\n"
+            f"Использовано анализов: <b>{used}/{free_limit}</b>\n"
             f"Осталось бесплатных: <b>{remaining}</b>\n\n"
-            "Оформите подписку <b>Premium</b> за 300 ⭐/мес — неограниченные анализы.\n\n"
+            f"Оформите подписку <b>Premium</b> за {price} ⭐/мес — неограниченные анализы.\n\n"
             "Нажмите /subscribe для оплаты."
         )
 
 
 @payment_router.message(F.text == "/subscribe")
-async def send_invoice_handler(message: Message) -> None:
+async def send_invoice_handler(message: Message, session: AsyncSession) -> None:
+    price = await _get_price(session)
     await message.answer_invoice(
         title="Подписка MedDecode Premium",
         description="Неограниченное количество анализов медицинских документов на 30 дней.",
         payload="premium_subscription_30d",
         currency=CURRENCY,
-        prices=[LabeledPrice(label="Premium на 30 дней", amount=SUBSCRIPTION_PRICE)],
+        prices=[LabeledPrice(label="Premium на 30 дней", amount=price)],
         provider_token="",
     )
     logger.info("Инвойс отправлен пользователю %d", message.from_user.id)
 
-
-@payment_router.message(F.text == "/test_pay")
-async def test_pay_handler(message: Message, session: AsyncSession) -> None:
-    """Активирует Premium без реальной оплаты — только для демонстрации."""
-    await process_payment(
-        telegram_id=message.from_user.id,
-        user_repo=UserRepository(session),
-    )
-    logger.info("Тестовая активация Premium для пользователя %d", message.from_user.id)
-    await message.answer(
-        "✅ <b>[ТЕСТ]</b> Подписка активирована вручную администратором.\n"
-        "Подписка <b>Premium</b> активирована на 30 дней.\n\n"
-        "Теперь вы можете загружать неограниченное количество анализов."
-    )
 
 
 @payment_router.pre_checkout_query()

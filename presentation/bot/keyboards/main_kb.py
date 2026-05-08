@@ -1,12 +1,15 @@
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 
 
-# Функция создаёт и возвращает главную Reply-клавиатуру с двумя кнопками
-def main_keyboard():
+def main_keyboard(is_admin: bool = False):
     builder = ReplyKeyboardBuilder()
-    builder.button(text="Загрузить анализ")  # кнопка для отправки файла на анализ
-    builder.button(text="Моя подписка")      # кнопка для просмотра статуса подписки
-    # resize_keyboard=True — уменьшает кнопки до компактного размера
+    builder.button(text="Загрузить анализ")
+    builder.button(text="Моя подписка")
+    if is_admin:
+        builder.button(text="Панель администратора")
+        builder.adjust(2, 1)
+    else:
+        builder.adjust(2)
     return builder.as_markup(resize_keyboard=True)
 
 

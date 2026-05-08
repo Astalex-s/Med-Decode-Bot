@@ -5,6 +5,7 @@ import sys
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.fsm.storage.memory import MemoryStorage
 
 from presentation.bot.handlers.consent import consent_router
 from presentation.bot.handlers.analyze import analize_router
@@ -18,7 +19,7 @@ from config import settings
 logger = logging.getLogger(__name__)
 
 TOKEN = settings.BOT_TOKEN
-dp = Dispatcher()
+dp = Dispatcher(storage=MemoryStorage())
 
 
 async def db_session_middleware(handler, event, data):

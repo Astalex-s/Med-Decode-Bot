@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from application.use_cases.check_subscription import check_subscription
 from infrastructure.db.repositories.user_repo import UserRepository
+from infrastructure.db.repositories.config_repo import ConfigRepository
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +36,11 @@ class SubscriptionMiddleware(BaseMiddleware):
         if session is None:
             return await handler(event, data)
 
+        config_repo = ConfigRepository(session)
+        free_limit = int(await config_repo.get("free_limit", str(settings.FREE_LIMIT)))
+
         repo = UserRepository(session)
-        allowed, reason = await check_subscription(event.from_user.id, repo)
+        allowed, reason = await check_subscription(event.from_user.id, repo, free_limit=free_limit)
 
         if not allowed:
             logger.info(

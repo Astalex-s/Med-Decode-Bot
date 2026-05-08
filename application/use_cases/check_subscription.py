@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 async def check_subscription(
     telegram_id: int,
     user_repo: IUserRepository,
+    free_limit: int | None = None,
 ) -> tuple[bool, str]:
     """
     Проверяет, может ли пользователь выполнить анализ.
@@ -38,12 +39,12 @@ async def check_subscription(
             return True, ""
 
     # Нет активной подписки — проверяем бесплатный лимит
-    if user.analyses_used < settings.FREE_LIMIT:
-        remaining = settings.FREE_LIMIT - user.analyses_used
-        logger.info("Пользователь %d: использовано %d/%d анализов", telegram_id, user.analyses_used, settings.FREE_LIMIT)
+    limit = free_limit if free_limit is not None else settings.FREE_LIMIT
+    if user.analyses_used < limit:
+        logger.info("Пользователь %d: использовано %d/%d анализов", telegram_id, user.analyses_used, limit)
         return True, ""
 
     return False, (
-        f"Вы использовали все {settings.FREE_LIMIT} бесплатных анализа.\n\n"
+        f"Вы использовали все {limit} бесплатных анализа.\n\n"
         "Оформите подписку для продолжения — нажмите кнопку «Моя подписка»."
     )

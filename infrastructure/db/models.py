@@ -34,6 +34,14 @@ class AnalysisHistory(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class BotConfig(Base):
+    """Динамические настройки бота, изменяемые через панель администратора."""
+    __tablename__ = "bot_config"
+
+    key = Column(String(100), primary_key=True)
+    value = Column(String(500), nullable=False)
+
+
 class UserConsent(Base):
     """Журнал согласий на обработку персональных данных (ФЗ-152 РФ)."""
     __tablename__ = "user_consents"

@@ -1,15 +1,16 @@
 import logging
 import uuid
+from datetime import datetime
 
 from aiogram import Router, F
-from aiogram.enums import ParseMode
-from aiogram.types import Message
+from aiogram.types import Message, BufferedInputFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from application.use_cases.analyze_file import analyze_file
 from infrastructure.db.repositories.user_repo import UserRepository
 from infrastructure.db.repositories.analysis_repo import AnalysisRepository
 from infrastructure.ocr.ocr import OCRService
+from infrastructure.pdf.pdf_generator import generate_report_pdf
 
 logger = logging.getLogger(__name__)
 
@@ -22,16 +23,25 @@ EXTENSIONS = {
 }
 ALLOWED_MIME_TYPES = set(EXTENSIONS.keys())
 
-MAX_MSG_LEN = 4096
-
 
 async def _send_result(message: Message, text: str) -> None:
-    """Отправляет результат, разбивая на части если превышает лимит Telegram."""
-    # GPT возвращает markdown — отправляем без parse_mode
-    while text:
-        chunk = text[:MAX_MSG_LEN]
-        text = text[MAX_MSG_LEN:]
-        await message.answer(chunk, parse_mode=None)
+    """Формирует PDF-отчёт и отправляет его пользователю."""
+    try:
+        pdf_bytes = generate_report_pdf(text, generated_at=datetime.now())
+        filename = f"meddecode_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        doc = BufferedInputFile(pdf_bytes, filename=filename)
+        await message.answer_document(
+            doc,
+            caption="Расшифровка готова. Откройте PDF-файл для просмотра полного отчёта.",
+        )
+    except Exception:
+        logger.exception("Не удалось сгенерировать PDF, отправляю текст")
+        # Fallback: отправить текст если PDF не удался
+        MAX_MSG_LEN = 4096
+        while text:
+            chunk = text[:MAX_MSG_LEN]
+            text = text[MAX_MSG_LEN:]
+            await message.answer(chunk, parse_mode=None)
 
 
 @analize_router.message(F.photo)
