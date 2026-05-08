@@ -6,6 +6,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import BotCommand, BotCommandScopeDefault, BotCommandScopeChat
 
 from presentation.bot.handlers.consent import consent_router
 from presentation.bot.handlers.analyze import analize_router
@@ -46,6 +47,26 @@ async def main() -> None:
     dp.include_router(admin_router)     # /export_users
     dp.include_router(payment_router)   # Моя подписка / платежи
     dp.include_router(analize_router)   # фото и документы
+
+    # Меню команд для обычных пользователей
+    user_commands = [
+        BotCommand(command="analyze", description="Загрузить анализ"),
+        BotCommand(command="status", description="Мой статус"),
+        BotCommand(command="subscribe", description="Оформить подписку"),
+    ]
+    await bot.set_my_commands(user_commands, scope=BotCommandScopeDefault())
+
+    # Расширенное меню для администраторов
+    admin_commands = user_commands + [
+        BotCommand(command="export", description="Журнал пользователей"),
+        BotCommand(command="settings", description="Настройка платежей"),
+        BotCommand(command="testpay", description="Тестовый платёж"),
+    ]
+    for admin_id in settings.ADMIN_IDS:
+        try:
+            await bot.set_my_commands(admin_commands, scope=BotCommandScopeChat(chat_id=admin_id))
+        except Exception:
+            logger.warning("Не удалось установить команды для админа %d", admin_id)
 
     logger.info("Bot started: @MedDecodeBot")
     try:

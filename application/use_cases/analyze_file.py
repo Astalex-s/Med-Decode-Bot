@@ -51,7 +51,7 @@ async def analyze_file(
     # Если GPT сообщил что не может распознать — не засчитываем
     if any(marker in ai_result.lower() for marker in _NOT_RECOGNIZED_MARKERS):
         logger.info("GPT не распознал анализ — попытка не засчитана для пользователя %d", telegram_id)
-        return ai_result + "\n\n<i>Попытка не засчитана.</i>"
+        return ai_result + "\n\nПопытка не засчитана."
 
     analysis = Analysis(
         user_id=user.id,

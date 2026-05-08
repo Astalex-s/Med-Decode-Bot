@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime
 
 from aiogram import Router, F
+from aiogram.filters import Command
 from aiogram.types import Message, BufferedInputFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,6 +43,16 @@ async def _send_result(message: Message, text: str) -> None:
             chunk = text[:MAX_MSG_LEN]
             text = text[MAX_MSG_LEN:]
             await message.answer(chunk, parse_mode=None)
+
+
+@analize_router.message(Command("analyze"))
+async def analyze_command(message: Message) -> None:
+    """Инструкция по загрузке анализа."""
+    await message.answer(
+        "Отправьте фото или PDF-файл с результатами анализов.\n\n"
+        "Бот распознает данные и сформирует подробный отчёт в PDF "
+        "с расшифровкой каждого показателя."
+    )
 
 
 @analize_router.message(F.photo)

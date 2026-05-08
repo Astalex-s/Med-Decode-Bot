@@ -1,6 +1,7 @@
 import logging
 
 from aiogram import Router, F
+from aiogram.filters import Command
 from aiogram.types import Message, LabeledPrice, PreCheckoutQuery, SuccessfulPayment
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,7 +29,7 @@ async def _get_free_limit(session: AsyncSession) -> int:
     return int(await config.get("free_limit", str(settings.FREE_LIMIT)))
 
 
-@payment_router.message(F.text == "Моя подписка")
+@payment_router.message(Command("status"))
 async def subscription_info_handler(message: Message, session: AsyncSession) -> None:
     repo = UserRepository(session)
     user = await repo.get_by_telegram_id(message.from_user.id)
@@ -55,7 +56,7 @@ async def subscription_info_handler(message: Message, session: AsyncSession) -> 
         )
 
 
-@payment_router.message(F.text == "/subscribe")
+@payment_router.message(Command("subscribe"))
 async def send_invoice_handler(message: Message, session: AsyncSession) -> None:
     price = await _get_price(session)
     await message.answer_invoice(

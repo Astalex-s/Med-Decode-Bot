@@ -15,7 +15,6 @@ from domain.entities.consent import UserConsent
 from domain.entities.user import User
 from infrastructure.db.repositories.consent_repo import ConsentRepository
 from infrastructure.db.repositories.user_repo import UserRepository
-from presentation.bot.keyboards.main_kb import main_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -89,10 +88,17 @@ async def handle_agree(callback: CallbackQuery, session: AsyncSession) -> None:
     await repo.save(consent)
     logger.info("Пользователь %d (@%s) дал согласие на обработку ПДн", callback.from_user.id, callback.from_user.username)
 
-    # Убираем кнопки с сообщения о согласии
-    await callback.message.edit_reply_markup(reply_markup=None)
+    # Удаляем сообщение с согласием
+    try:
+        await callback.message.delete()
+    except TelegramBadRequest:
+        # Если не удалось удалить — просто убираем кнопки
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except TelegramBadRequest:
+            pass
 
-    # Регистрируем в users и показываем меню
+    # Регистрируем в users и отправляем инструкцию
     await _register_and_greet(callback.message, session, callback.from_user)
 
 
@@ -119,8 +125,25 @@ async def handle_decline(callback: CallbackQuery, session: AsyncSession) -> None
     )
 
 
+WELCOME_TEXT = (
+    "<b>Как пользоваться ботом:</b>\n\n"
+    "1. Отправьте фото или PDF с результатами анализов — бот "
+    "распознает данные и сформирует подробный отчёт в PDF.\n"
+    "2. Отчёт включает расшифровку каждого показателя, "
+    "общую оценку и рекомендации.\n"
+    "3. Вы можете отправить несколько страниц одного анализа — "
+    "просто прикрепите все фото.\n\n"
+    "<b>Команды:</b>\n"
+    "/analyze — загрузить анализ\n"
+    "/status — мой статус и подписка\n"
+    "/subscribe — оформить подписку Premium\n\n"
+    "Нажмите кнопку <b>Меню</b> слева от поля ввода, "
+    "чтобы увидеть все доступные команды."
+)
+
+
 async def _register_and_greet(message: Message, session: AsyncSession, user_obj=None) -> None:
-    """Регистрирует пользователя в БД (если ещё нет) и отправляет главное меню."""
+    """Регистрирует пользователя в БД (если ещё нет) и отправляет инструкцию."""
     from_user = user_obj or message.from_user
     user_repo = UserRepository(session)
     user = await user_repo.get_by_telegram_id(from_user.id)
@@ -133,11 +156,16 @@ async def _register_and_greet(message: Message, session: AsyncSession, user_obj=
         await user_repo.create(new_user)
         logger.info("Зарегистрирован пользователь %d (@%s)", from_user.id, from_user.username)
 
-    from config import settings as cfg
-    is_admin = from_user.id in cfg.ADMIN_IDS
-    await message.answer(
-        f"<b>{from_user.full_name}</b>, добро пожаловать в MedDecode!\n\n"
-        "Отправьте фото или PDF с медицинскими анализами — я расшифрую их простым языком.\n\n"
-        "Выберите действие:",
-        reply_markup=main_keyboard(is_admin=is_admin)
+    # Отправляем фото с инструкцией
+    photo = FSInputFile("assets/welcome.jpg")
+    instruction_msg = await message.answer_photo(
+        photo,
+        caption=f"<b>{from_user.full_name}</b>, добро пожаловать в MedDecode!\n\n"
+        + WELCOME_TEXT,
     )
+
+    # Закрепляем сообщение с инструкцией
+    try:
+        await instruction_msg.pin(disable_notification=True)
+    except TelegramBadRequest:
+        logger.warning("Не удалось закрепить сообщение для пользователя %d", from_user.id)

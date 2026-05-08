@@ -7,7 +7,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message, CallbackQuery, BufferedInputFile
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
@@ -15,14 +15,12 @@ from infrastructure.db.models import User, UserConsent, Subscription
 from infrastructure.db.repositories.config_repo import ConfigRepository
 from infrastructure.db.repositories.user_repo import UserRepository
 from application.use_cases.process_payment import process_payment
-from presentation.bot.keyboards.admin_kb import admin_keyboard, payment_settings_keyboard
-from presentation.bot.keyboards.main_kb import main_keyboard
+from presentation.bot.keyboards.admin_kb import payment_settings_keyboard
 
 logger = logging.getLogger(__name__)
 
 admin_router = Router(name=__name__)
 
-# Ключи настроек в БД
 KEY_FREE_LIMIT = "free_limit"
 KEY_SUBSCRIPTION_PRICE = "subscription_price"
 
@@ -36,35 +34,11 @@ def _is_admin(telegram_id: int) -> bool:
     return telegram_id in settings.ADMIN_IDS
 
 
-# ─── Вход / выход из панели ──────────────────────────────────────────────────
-
-@admin_router.message(F.text == "Панель администратора")
-async def enter_admin_panel(message: Message) -> None:
-    if not _is_admin(message.from_user.id):
-        return
-    await message.answer(
-        "Панель администратора",
-        reply_markup=admin_keyboard(),
-    )
-
-
-@admin_router.message(F.text == "Назад")
-async def exit_admin_panel(message: Message) -> None:
-    if not _is_admin(message.from_user.id):
-        return
-    await message.answer(
-        "Главное меню",
-        reply_markup=main_keyboard(is_admin=True),
-    )
-
-
 # ─── Журнал пользователей ────────────────────────────────────────────────────
 
-@admin_router.message(F.text == "Журнал пользователей")
-@admin_router.message(Command("export_users"))
+@admin_router.message(Command("export"))
 async def export_users(message: Message, session: AsyncSession) -> None:
     if not _is_admin(message.from_user.id):
-        logger.warning("Попытка выгрузки журнала не-администратором: %d", message.from_user.id)
         return
 
     users_result = await session.execute(select(User).order_by(User.created_at))
@@ -112,13 +86,12 @@ async def export_users(message: Message, session: AsyncSession) -> None:
     csv_bytes = output.getvalue().encode("utf-8-sig")
     file = BufferedInputFile(csv_bytes, filename="meddecode_users.csv")
     await message.answer_document(file, caption=f"Журнал пользователей: {len(users)} записей.")
-    logger.info("Администратор %d выгрузил журнал пользователей (%d записей)", message.from_user.id, len(users))
+    logger.info("Администратор %d выгрузил журнал (%d записей)", message.from_user.id, len(users))
 
 
 # ─── Тестовый платёж ─────────────────────────────────────────────────────────
 
-@admin_router.message(F.text == "Тестовый платёж")
-@admin_router.message(Command("test_pay"))
+@admin_router.message(Command("testpay"))
 async def test_pay_handler(message: Message, session: AsyncSession) -> None:
     if not _is_admin(message.from_user.id):
         return
@@ -142,7 +115,7 @@ async def _get_current_settings(session: AsyncSession) -> tuple[int, int]:
     return free_limit, price
 
 
-@admin_router.message(F.text == "Настройка платежей")
+@admin_router.message(Command("settings"))
 async def show_payment_settings(message: Message, session: AsyncSession) -> None:
     if not _is_admin(message.from_user.id):
         return
@@ -150,7 +123,7 @@ async def show_payment_settings(message: Message, session: AsyncSession) -> None
     await message.answer(
         "<b>Настройка платежей</b>\n\n"
         f"Бесплатный лимит: <b>{free_limit}</b> анализов\n"
-        f"Цена подписки: <b>{price} ⭐</b> / мес\n\n"
+        f"Цена подписки: <b>{price}</b> / мес\n\n"
         "Нажмите кнопку для изменения параметра:",
         reply_markup=payment_settings_keyboard(free_limit, price),
     )
@@ -225,6 +198,6 @@ async def save_price(message: Message, state: FSMContext, session: AsyncSession)
     free_limit, _ = await _get_current_settings(session)
     logger.info("Администратор %d изменил цену подписки на %d stars", message.from_user.id, value)
     await message.answer(
-        f"Цена подписки обновлена: <b>{value} ⭐</b> / мес",
+        f"Цена подписки обновлена: <b>{value}</b> / мес",
         reply_markup=payment_settings_keyboard(free_limit, value),
     )
